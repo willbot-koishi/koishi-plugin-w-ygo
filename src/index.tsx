@@ -7,12 +7,16 @@ export interface Config {
   retry: number
   mdmDefault: boolean
   showExpiredPacks: boolean
+  cardImageUrl: string
 }
 
 export const Config: Schema<Config> = Schema.object({
   retry: Schema.number().default(3).description('API 请求失败时的重试次数'),
   mdmDefault: Schema.boolean().default(false).description('是否默认启用 Master Duel Meta 信息'),
   showExpiredPacks: Schema.boolean().default(false).description('是否显示过期的 MD 卡包'),
+  cardImageUrl: Schema.string()
+    .default('https://cdn.233.momobako.com/ygoimg/sc/{id}.webp')
+    .description('卡图 URL 模板，使用 {id} 表示卡片密码'),
 })
 
 export function apply(ctx: Context, config: Config) {
@@ -63,7 +67,7 @@ export function apply(ctx: Context, config: Config) {
 
       session.send(<message forward>
         <message>
-          <img src={API.momobako({ id: card.id })} alt={card.en_name} />
+          <img src={API.cardImage(config.cardImageUrl, { id: card.id })} alt={card.en_name} />
           <p>[MD 卡名] {card.md_name || '无'}</p>
           <p>[常用名] {card.cn_name}</p>
           <p>[日文名] {card.jp_name ? `${card.jp_name}（${card.jp_ruby}）` : '无'}</p>

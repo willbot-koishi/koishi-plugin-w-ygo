@@ -103,5 +103,5 @@ export namespace API {
   }
   export type MdmCards = MdmCard[]
 
-  export const momobako = (query: { id: number }) => `https://cdn.233.momobako.com/ygopro/pics/${query.id}.jpg`
+  export const cardImage = (template: string, query: { id: number }) => template.replaceAll('{id}', String(query.id))
 }
