@@ -20,9 +20,18 @@
   "dependencies": {
     "@satorijs/element": "^3.1.8"
   },
+  "devDependencies": {
+    "@koishijs/plugin-database-memory": "^3.7.0",
+    "@koishijs/plugin-mock": "^2.6.6",
+    "@types/node": "^22.19.7",
+    "typescript": "^5.9.3",
+    "yml-register": "^1.2.5"
+  },
   "scripts": {
     "build": "yarn run -T build w-ygo",
     "bump": "yarn run -T bump w-ygo",
-    "pub": "yarn run -T pub w-ygo"
+    "pub": "yarn run -T pub w-ygo",
+    "check": "tsc -p tsconfig.test.json --noEmit --incremental false --composite false",
+    "test": "yarn run -T tsx --test test/*.test.ts"
   }
 }

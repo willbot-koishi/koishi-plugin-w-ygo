@@ -1,5 +1,5 @@
 export namespace API {
-  export const ygocdb = (query: { search: string }) => `https://ygocdb.com/api/v0/?search=${encodeURIComponent(query.search)}`
+  export const ygocdb = (query: { search: string, start?: number }) => `https://ygocdb.com/api/v0/?search=${encodeURIComponent(query.search)}${query.start ? `&start=${query.start}` : ''}`
   export type Ygocdb = {
     result: Array<{
       cid: number
@@ -38,6 +38,7 @@ export namespace API {
     }>
     next: number
   }
+  export type Card = Ygocdb['result'][number]
 
   export const mdmcards = (query: { name: string }) => `https://www.masterduelmeta.com/api/v1/cards?search=${encodeURIComponent(query.name)}`
 
