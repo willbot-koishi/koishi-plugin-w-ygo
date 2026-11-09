@@ -175,7 +175,7 @@ export function apply(ctx: Context, config: Config) {
       if (previous) clear(key, previous)
       const entry: Pending = {
         mdm: !! options.mdm,
-        search: new CardSearch(start => get<API.Ygocdb>(API.ygocdb({ search, start }))),
+        search: new CardSearch(search, start => get<API.Ygocdb>(API.ygocdb({ search, start }))),
       }
       pending.set(key, entry)
       // Identity, rather than request completion order, determines which query

@@ -5,6 +5,7 @@ export namespace API {
       cid: number
       id: number
       en_name: string
+      wiki_en?: string
       jp_name: string
       jp_ruby: string
       cn_name: string

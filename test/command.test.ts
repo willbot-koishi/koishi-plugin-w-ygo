@@ -401,7 +401,7 @@ test('pages lazily follow API start/next cursors and cache previous API batches'
     if (start === 4) return { result: [card(5)], next: 0 }
     assert.fail(`unexpected cursor ${start}`)
   })
-  await client.receive('ygo 测试')
+  await client.receive('ygo 卡片')
   assert.equal(calls.length, 2)
   const second = await client.receive('下一页')
   assert.match(second[0], /第 2 页，共 3 页/)
@@ -409,7 +409,7 @@ test('pages lazily follow API start/next cursors and cache previous API batches'
   await client.receive('第3页')
   assert.equal(calls.length, 3)
   assert.deepEqual(calls.map(url => Number(url.searchParams.get('start') ?? 0)), [0, 2, 4])
-  assert.ok(calls.every(url => url.searchParams.get('search') === '测试'))
+  assert.ok(calls.every(url => url.searchParams.get('search') === '卡片'))
   assert.match((await client.receive('5'))[0], /<img[^>]*\/5.webp/)
 })
 
@@ -433,7 +433,7 @@ test('failed page fetches keep the old selection and retry the failed cursor', a
     }
     return { result: [card(4), card(5)], next: 0 }
   })
-  await client.receive('ygo 测试')
+  await client.receive('ygo 卡片')
   await client.shouldReply('下一页', '翻页失败，仍保留原页面，请稍后重试。')
   await client.shouldReply('3', '请输入 1～2 之间的序号。')
   assert.match((await client.receive('下一页'))[0], /第 2 页/)
@@ -467,7 +467,7 @@ test('concurrent paging and selection are guarded; idle time is paused during a 
     return response.promise
   })
   t.mock.timers.enable({ apis: ['setTimeout'] })
-  await client.receive('ygo 测试')
+  await client.receive('ygo 卡片')
   const flipping = client.receive('下一页')
   await started.promise
   t.mock.timers.tick(2000)
@@ -486,7 +486,7 @@ test('a new query invalidates an old in-flight page without losing its own timer
   const response = deferred<unknown>()
   const { ctx, client } = await fixture({ maxResults: 2, selectionTimeout: 1000 }, (url) => {
     if (url.searchParams.get('search') === '新查询') return { result: [card(8), card(9)], next: 0 }
-    if (! url.searchParams.has('start')) return { result: [card(1), card(2), card(3)], next: 3 }
+    if (! url.searchParams.has('start')) return { result: [card(1, '旧查询卡片1'), card(2, '旧查询卡片2'), card(3, '旧查询卡片3')], next: 3 }
     started.resolve()
     return response.promise
   })
@@ -510,7 +510,7 @@ test('cancel during paging prevents the late page from reactivating the session'
     started.resolve()
     return response.promise
   })
-  await client.receive('ygo 测试')
+  await client.receive('ygo 卡片')
   const flipping = client.receive('下一页')
   await started.promise
   await ctx.mock.client('alice').shouldReply('取消', '已取消选卡。')
@@ -518,4 +518,65 @@ test('cancel during paging prevents the late page from reactivating the session'
   assert.deepEqual(await flipping, [])
   await client.shouldNotReply('下一页')
   await client.shouldNotReply('1')
+})
+
+test('candidate lists only contain name hits when any literal name matches exist', async () => {
+  const broad = card(1, '无关魔法卡')
+  broad.text.desc = '将青眼白龙加入手卡。'
+  const { client } = await fixture({}, () => ({
+    result: [broad, card(2, '青眼白龙'), card(3, '青眼亚白龙')], next: 0,
+  }))
+  const replies = await client.receive('ygo 青眼')
+  assert.equal(replies.length, 3)
+  assert.match(replies[1], /\[序号\] 1[\s\S]*青眼白龙/)
+  assert.match(replies[2], /\[序号\] 2[\s\S]*青眼亚白龙/)
+  assert.doesNotMatch(replies.join(''), /无关魔法卡/)
+  assert.match((await client.receive('2'))[0], /<img[^>]*\/3.webp/)
+})
+
+test('effect searches keep unrestricted results when no card name contains the query', async () => {
+  const { client, calls } = await fixture({ maxResults: 2 })
+  const replies = await client.receive('ygo 抽2张')
+  assert.equal(replies.length, 3)
+  assert.match(replies[1], /卡片1/)
+  assert.match((await client.receive('下一页'))[1], /卡片3/)
+  assert.equal(calls.length, 1)
+})
+
+test('a sole name hit found after a broad first batch opens its detail directly', async () => {
+  const { client, calls } = await fixture({}, url => url.searchParams.has('start')
+    ? { result: [card(4, '青眼白龙')], next: 0 }
+    : { result: [card(1), card(2), card(3)], next: 3 })
+  const replies = await client.receive('ygo 青眼')
+  assert.equal(replies.length, 1, replies.join('\n\n'))
+  assert.match(replies[0], /<img[^>]*\/4.webp/)
+  assert.doesNotMatch(replies[0], /\[序号\]|卡片1|卡片2|卡片3/)
+  assert.equal(calls.length, 2)
+})
+
+test('-p and interactive selection use the filtered result set, not raw API positions', async () => {
+  const { client } = await fixture({ maxResults: 2 }, () => ({
+    result: [card(1, '青眼1'), card(2), card(3, '青眼2'), card(4), card(5, '青眼3'), card(6, '青眼4')], next: 0,
+  }))
+  const replies = await client.receive('ygo 青眼 -p 2')
+  assert.match(replies[0], /第 2 页，共 2 页[\s\S]*输入 3～4/)
+  assert.match(replies[1], /\[序号\] 3[\s\S]*青眼3/)
+  assert.match(replies[2], /\[序号\] 4[\s\S]*青眼4/)
+  assert.match((await client.receive('4'))[0], /<img[^>]*\/6.webp/)
+})
+
+test('paging never broadens a name-filtered list with later API results', async () => {
+  const { client, calls } = await fixture({ maxResults: 2 }, (url) => {
+    const start = Number(url.searchParams.get('start') ?? 0)
+    if (start === 0) return { result: [card(1, '青眼1'), card(2, '青眼2'), card(3, '青眼3')], next: 3 }
+    if (start === 3) return { result: [card(4, '不应出现')], next: 4 }
+    return { result: [card(5, '青眼4')], next: 0 }
+  })
+  await client.receive('ygo 青眼')
+  assert.equal(calls.length, 1)
+  const second = await client.receive('下一页')
+  assert.match(second[0], /第 2 页，共 2 页/)
+  assert.match(second[2], /\[序号\] 4[\s\S]*青眼4/)
+  assert.doesNotMatch(second.join(''), /不应出现/)
+  assert.match((await client.receive('4'))[0], /<img[^>]*\/5.webp/)
 })

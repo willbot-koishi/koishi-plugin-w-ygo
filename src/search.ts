@@ -1,5 +1,16 @@
 import type { API } from './apis'
 
+const normalize = (text: string) => text.normalize('NFKC').toLowerCase()
+
+export function nameIncludes(card: API.Card, query: string) {
+  const keyword = normalize(query.trim())
+  if (! keyword) return false
+  return [card.cn_name, card.sc_name, card.md_name, card.nwbbs_n, card.cnocg_n,
+    card.jp_name, card.jp_ruby, card.en_name, card.wiki_en].some(name => (
+    typeof name === 'string' && normalize(name).includes(keyword)
+  ))
+}
+
 export interface SearchPage {
   number: number
   offset: number
@@ -16,15 +27,18 @@ export function validPage(page: number, pageSize: number) {
 export class CardSearch {
   readonly cards: API.Card[] = []
   private next: number | undefined = 0
+  private nameOnly = false
 
-  constructor(private request: (start: number) => Promise<API.Ygocdb>) {}
+  constructor(private query: string, private request: (start: number) => Promise<API.Ygocdb>) {}
 
   async page(number: number, pageSize: number, current = () => true): Promise<SearchPage | undefined> {
     if (! validPage(number, pageSize)) throw new Error('Invalid page number')
     // One extra card tells us whether Next exists, even at an exact page
     // boundary. API batches are weight-based, not the configured UI page size.
     const needed = Math.max(number * pageSize + 1, 2)
-    while (current() && this.cards.length < needed && this.next !== undefined) {
+    // Until a name hit is found, broad matches cannot be shown: a later API
+    // batch may still contain a literal name match. Fall back only at EOF.
+    while (current() && this.next !== undefined && (! this.nameOnly || this.cards.length < needed)) {
       const start = this.next
       const batch = await this.request(start)
       if (! current()) return
@@ -32,7 +46,12 @@ export class CardSearch {
         || (batch.next !== 0 && (batch.next <= start || ! batch.result.length))) {
         throw new Error('Invalid search result or non-advancing cursor')
       }
-      this.cards.push(...batch.result)
+      const matches = batch.result.filter(card => nameIncludes(card, this.query))
+      if (! this.nameOnly && matches.length) {
+        this.nameOnly = true
+        this.cards.length = 0
+      }
+      this.cards.push(...(this.nameOnly ? matches : batch.result))
       this.next = batch.next || undefined
     }
     if (! current()) return
