@@ -55,6 +55,6 @@ export function renderDetail(card: API.Card, cardImageUrl: string, mdmInfo?: h.F
       <img src={API.cardImage(cardImageUrl, { id: card.id })} alt={card.en_name} />
       {renderCardText(card)}
     </message>
-    {mdmInfo !== undefined && <message>{mdmInfo}</message>}
+    {mdmInfo !== undefined ? <message>{mdmInfo}</message> : null}
   </message>
 }

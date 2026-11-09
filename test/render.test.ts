@@ -24,6 +24,11 @@ test('details retain the configurable image endpoint', () => {
   assert.doesNotMatch(detail, /卡片密码|00000123/)
 })
 
+test('details without MDM contain no trailing boolean text node', () => {
+  const detail = renderDetail(card(1), 'https://example.invalid/{id}.jpg')
+  assert.deepEqual(detail.children.map(element => element.type), ['message'])
+})
+
 test('expired MDM packs are hidden by default or sorted after current packs', () => {
   const entry = mdmCard(1001)
   entry.obtain = [
